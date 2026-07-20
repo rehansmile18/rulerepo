@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+.claude/
+
+# Stray nested repo (unrelated rehansmile18/TLM.git) — not part of this project
+TLM/
