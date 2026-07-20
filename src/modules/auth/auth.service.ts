@@ -20,7 +20,10 @@ export async function login(input: LoginInput) {
     throw new HttpError(401, "Invalid email or password");
   }
 
-  const token = jwt.sign({ userId: String(user._id) }, env.jwtSecret, { expiresIn: env.jwtExpiresIn } as jwt.SignOptions);
+  const token = jwt.sign({ userId: String(user._id) }, env.jwtSecret, {
+    expiresIn: env.jwtExpiresIn,
+    algorithm: "HS256",
+  } as jwt.SignOptions);
   await recordAudit({ entityType: "user", entityId: String(user._id), action: "login", actorId: String(user._id), before: null, after: null });
 
   return {

@@ -29,7 +29,9 @@ export const authenticate = asyncHandler(async (req: Request, _res: Response, ne
   const token = header.slice("Bearer ".length);
   let payload: unknown;
   try {
-    payload = jwt.verify(token, env.jwtSecret);
+    // Pin the accepted algorithm so a token can't be presented with a different alg (e.g. "none"
+    // or an RS/HS confusion) — verification only trusts the HS256 signature we actually issue.
+    payload = jwt.verify(token, env.jwtSecret, { algorithms: ["HS256"] });
   } catch {
     throw new HttpError(401, "Invalid or expired token");
   }

@@ -2,30 +2,49 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # Bound to localhost only — the database must never be reachable from the network. Change the
+    # host side deliberately (and only behind a firewall) if you really need remote access.
     ports:
-      - "27017:27017"
+      - "127.0.0.1:27017:27017"
     environment:
+      # MongoDB starts with authentication enabled. Override these with real values via a .env
+      # file (or your orchestrator's secrets) before using this anywhere but a local machine.
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-tlm_root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-local-dev-only-change-me}
       MONGO_INITDB_DATABASE: tlm_rule_repository
     volumes:
       - mongo_data:/data/db
-      # Auto-seeds demo data on first boot only (when /data/db is empty) — see scripts/mongo-init.js.
-      - ./scripts/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js:ro
 
   api:
     build: .
     restart: unless-stopped
     depends_on:
       - mongo
+    # Localhost only by default. Put a reverse proxy / TLS terminator in front for real exposure.
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       PORT: 4000
-      MONGODB_URI: mongodb://mongo:27017/tlm_rule_repository
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      # This compose file is a LOCAL DEV/DEMO stack (NODE_ENV=development), which is why the
+      # placeholder JWT secret below is accepted. Set NODE_ENV=production AND supply a real
+      # JWT_SECRET + Mongo credentials (e.g. in a .env file) to run it as a real deployment —
+      # the app refuses to boot on placeholder secrets outside development/test.
+      NODE_ENV: ${NODE_ENV:-development}
+      MONGODB_URI: mongodb://${MONGO_ROOT_USERNAME:-tlm_root}:${MONGO_ROOT_PASSWORD:-local-dev-only-change-me}@mongo:27017/tlm_rule_repository?authSource=admin
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-12h}
       REQUIRE_APPROVAL_SEPARATION: ${REQUIRE_APPROVAL_SEPARATION:-true}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
       SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-change-me-immediately}
+
+# Demo data is NOT seeded automatically (it would create accounts with well-known, repo-published
+# passwords). To load it into a running LOCAL stack on purpose, run:
+#
+#   docker compose exec -T mongo mongosh \
+#     "mongodb://tlm_root:local-dev-only-change-me@localhost:27017/tlm_rule_repository?authSource=admin" \
+#     < scripts/mongo-init.js
+#
+# (substitute your own Mongo credentials if you changed them). See README.md for the demo logins.
 
 volumes:
   mongo_data:

@@ -24,7 +24,7 @@ export type UpdateAssignmentInput = z.infer<typeof updateAssignmentSchema>;
 export const listAssignmentsQuerySchema = z.object({
   clientId: z.string().optional(),
   ruleGroupId: z.string().uuid().optional(),
-  page: z.coerce.number().int().min(1).default(1),
+  page: z.coerce.number().int().min(1).max(10000).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),
 });
 

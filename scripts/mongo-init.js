@@ -2,15 +2,22 @@
  * Raw MongoDB setup script — creates indexes and seeds the same demo dataset as
  * `npm run seed:demo`, but works directly against MongoDB with no Node/npm involved.
  *
- * Use this when you want the database ready before (or without) running the Node app at all —
- * e.g. inspecting it with Compass/mongosh, or auto-seeding a Docker Compose stack on first boot.
+ * ⚠️  LOCAL DEMO / EXPLORATION ONLY. This seeds user accounts whose passwords are PUBLIC — they
+ *     are documented in README.md and printed at the end of this script. Never run it against a
+ *     production, staging, shared, or network-reachable database: anyone who can reach the API
+ *     could then log in as a platform admin. It is intentionally NOT wired into any automatic
+ *     Docker init hook, so a plain `docker compose up` never creates these accounts.
  *
- * Run it with:
+ * Use it when you want a local database populated for exploration — e.g. inspecting it with
+ * Compass/mongosh, or loading demo data into a local Docker Compose stack on purpose.
+ *
+ * Run it directly against a local MongoDB:
  *   mongosh "mongodb://localhost:27017/tlm_rule_repository" scripts/mongo-init.js
  *
- * Or drop it into MongoDB's official Docker image init hook so a fresh `docker compose up`
- * seeds itself automatically (see docker-compose.yml, which already mounts it there) — that
- * hook only runs once, the first time the container starts with an empty data directory.
+ * Or load it into the running local Compose stack (which requires auth) on purpose:
+ *   docker compose exec -T mongo mongosh \
+ *     "mongodb://tlm_root:local-dev-only-change-me@localhost:27017/tlm_rule_repository?authSource=admin" \
+ *     < scripts/mongo-init.js
  *
  * Idempotent: checks for the demo client and exits early if this has already been run —
  * safe to run alongside `npm run seed:demo` too (whichever runs first "wins"; the second

@@ -3,6 +3,13 @@ import "dotenv/config";
 const nodeEnv = process.env.NODE_ENV ?? "development";
 const isProduction = nodeEnv === "production";
 
+// The committed dev fallbacks are only acceptable in an explicitly-declared local dev or test
+// environment. ANYTHING else — production, staging, an unrecognized NODE_ENV, or an *unset*
+// NODE_ENV in a real deploy — must supply real secrets. Deliberately keyed on the raw env var
+// (not the "development" default) so a deploy that simply forgot to set NODE_ENV can't silently
+// boot on the committed JWT secret and hand out forgeable admin tokens.
+const allowsInsecureDefaults = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+
 // Known insecure placeholder values shipped in .env.example / docker-compose defaults.
 // Allowed for local/dev/test convenience, but must never reach production.
 const INSECURE_DEFAULTS = new Set([
@@ -12,19 +19,24 @@ const INSECURE_DEFAULTS = new Set([
 ]);
 
 /**
- * Resolves a secret env var. In production a missing value, or a value that is one of the
- * known public placeholders, hard-fails startup — so a deploy that forgets to set real
- * secrets refuses to boot instead of silently accepting forged tokens / seeding a public admin.
- * Outside production the dev fallback is used for convenience.
+ * Resolves a secret env var. Unless NODE_ENV is explicitly "development" or "test", a missing
+ * value — or a value that is one of the known public placeholders — hard-fails startup, so a
+ * deploy that forgets real secrets (or sets NODE_ENV to staging / leaves it unset) refuses to
+ * boot instead of silently accepting forged tokens / seeding a public admin. Only in an explicit
+ * local dev/test environment is the convenience fallback used.
  */
 function resolveSecret(name: string, devFallback: string): string {
   const value = process.env[name];
   if (!value) {
-    if (isProduction) throw new Error(`${name} must be set in production (no fallback allowed)`);
+    if (!allowsInsecureDefaults) {
+      throw new Error(
+        `${name} must be set unless NODE_ENV is "development" or "test" (NODE_ENV=${process.env.NODE_ENV ?? "<unset>"})`
+      );
+    }
     return devFallback;
   }
-  if (isProduction && INSECURE_DEFAULTS.has(value)) {
-    throw new Error(`${name} is set to a known insecure default; set a real value before running in production`);
+  if (!allowsInsecureDefaults && INSECURE_DEFAULTS.has(value)) {
+    throw new Error(`${name} is set to a known insecure default; set a real value before running outside local dev/test`);
   }
   return value;
 }

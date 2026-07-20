@@ -11,6 +11,7 @@
  * Safe to re-run — it checks for existing demo data and exits early instead of duplicating it.
  */
 import bcrypt from "bcryptjs";
+import { env } from "../config/env";
 import { connectDb } from "../config/db";
 import { User } from "../models/user.model";
 import { Client } from "../models/client.model";
@@ -43,6 +44,16 @@ async function publishGlobalPolicy(input: CreatePolicyInput, makerId: string, ch
 }
 
 async function main(): Promise<void> {
+  // Hard stop in production: this seeder creates accounts with well-known passwords committed to
+  // the repo. Running it against a production database would hand out platform-admin credentials.
+  if (env.isProduction) {
+    console.error(
+      "Refusing to run the demo seeder with NODE_ENV=production — it creates accounts with public, well-known passwords.\n" +
+        "Use `npm run seed` for the real bootstrap admin instead, or unset NODE_ENV/set it to development for a local demo."
+    );
+    process.exit(1);
+  }
+
   await connectDb();
 
   const alreadySeeded = await Client.findOne({ name: "Acme Retail" });

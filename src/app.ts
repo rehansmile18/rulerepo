@@ -2,6 +2,7 @@ import express, { Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
 import morgan from "morgan";
+import rateLimit from "express-rate-limit";
 import mongoose from "mongoose";
 import "./models/policies"; // registers all policyType discriminators
 import { authRouter } from "./modules/auth/auth.routes";
@@ -32,7 +33,20 @@ export function createApp(): Express {
     res.status(dbUp ? 200 : 503).json({ status: dbUp ? "ok" : "degraded", db: dbUp ? "up" : "down" });
   });
 
+  // Global per-IP rate limit across the whole API as a coarse DoS backstop — the /auth/login
+  // route keeps its own tighter limiter on top of this. /health is intentionally left outside so
+  // orchestrator probes are never throttled. Disabled under test so the suite isn't tripped.
+  const globalRateLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    limit: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: () => process.env.NODE_ENV === "test",
+    message: { error: "TooManyRequests", message: "Too many requests; slow down and try again later" },
+  });
+
   const v1 = express.Router();
+  v1.use(globalRateLimiter);
   v1.use(authRouter);
   v1.use(userRouter);
   v1.use(policyRouter);
