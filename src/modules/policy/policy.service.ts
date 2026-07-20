@@ -186,11 +186,27 @@ export async function submitPolicyForApproval(
   }
   const before = draft.toObject();
   draft.status = "pending_approval";
-  draft.metadata.updatedBy = actorId;
+  // Record the submitter separately; leave updatedBy as the content author/editor so the
+  // approval guard can block BOTH the maker and the submitter (they may be different users).
+  draft.metadata.submittedBy = actorId;
   draft.metadata.updatedAt = new Date();
   await draft.save();
   await recordAudit({ entityType: "policy", entityId: policyId, action: "submit_for_approval", actorId, before, after: draft.toObject() });
   return draft;
+}
+
+/**
+ * Separation-of-duties check: the approver/rejecter must not be anyone who made the change —
+ * neither the original author (createdBy), the last content editor (updatedBy), nor the
+ * submitter (submittedBy). Closes the gap where an author could self-approve after a different
+ * user merely clicked "submit".
+ */
+function assertDistinctFromMakers(policy: PolicyDoc, actorId: string, action: string): void {
+  if (!env.requireApprovalSeparation) return;
+  const makers = new Set([policy.metadata.createdBy, policy.metadata.updatedBy, policy.metadata.submittedBy].filter(Boolean));
+  if (makers.has(actorId)) {
+    throw new ForbiddenError(`A user who authored or submitted this policy cannot also ${action} it`);
+  }
 }
 
 /**
@@ -202,13 +218,12 @@ export async function submitPolicyForApproval(
 export async function approvePolicy(policyId: string, tenantFilter: Record<string, unknown>, actorId: string): Promise<PolicyDoc> {
   const pending = await Policy.findOne({ policyId, status: "pending_approval", ...tenantFilter });
   if (!pending) throw new NotFoundError(`No policy pending approval for ${policyId}`);
-  if (env.requireApprovalSeparation && pending.metadata.updatedBy === actorId) {
-    throw new ForbiddenError("The user who submitted this policy for approval cannot also approve it");
-  }
+  assertDistinctFromMakers(pending, actorId, "approve");
 
   const before = pending.toObject();
   const previousActive = await supersedeAndActivate(policyId, tenantFilter, pending);
-  pending.metadata.updatedBy = actorId;
+  // Do NOT overwrite updatedBy here — it identifies the content author/editor (a "maker") and
+  // is used by the separation-of-duties guard. The approver is recorded in the audit log.
   pending.metadata.updatedAt = new Date();
   await pending.save();
   await recordAudit({
@@ -231,14 +246,12 @@ export async function rejectPolicy(
 ): Promise<PolicyDoc> {
   const pending = await Policy.findOne({ policyId, status: "pending_approval", ...tenantFilter });
   if (!pending) throw new NotFoundError(`No policy pending approval for ${policyId}`);
-  if (env.requireApprovalSeparation && pending.metadata.updatedBy === actorId) {
-    throw new ForbiddenError("The user who submitted this policy for approval cannot also reject it");
-  }
+  assertDistinctFromMakers(pending, actorId, "reject");
 
   const before = pending.toObject();
   pending.status = "draft";
   pending.metadata.rejectionReason = reason ?? null;
-  pending.metadata.updatedBy = actorId;
+  // Keep updatedBy as the content maker (see approvePolicy); the rejecter is in the audit log.
   pending.metadata.updatedAt = new Date();
   await pending.save();
   await recordAudit({ entityType: "policy", entityId: policyId, action: "reject", actorId, before, after: pending.toObject() });

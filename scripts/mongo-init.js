@@ -80,7 +80,7 @@
   ]);
 
   function metadata() {
-    return { createdBy: String(makerId), createdAt: now, updatedBy: String(checkerId), updatedAt: now, tags: [], rejectionReason: null };
+    return { createdBy: String(makerId), createdAt: now, updatedBy: String(checkerId), updatedAt: now, tags: [], rejectionReason: null, submittedBy: null };
   }
 
   const POLICY_IDS = {

@@ -94,6 +94,35 @@ describe("policy lifecycle", () => {
     expect(approvedByOther.body.status).toBe("active");
   });
 
+  it("blocks the AUTHOR from self-approving even when a different user submitted it (regression)", async () => {
+    // A third admin, so approver can be someone who is neither author nor submitter.
+    await authed(ctx.app, adminAToken).post("/api/v1/users", { email: "admin-c@example.com", password: "adminc-password-1", role: "PLATFORM_ADMIN" });
+    const adminCToken = await login(ctx.app, "admin-c@example.com", "adminc-password-1");
+
+    // Author = A, submitter = B.
+    const draft = await authed(ctx.app, adminAToken).post("/api/v1/policies", {
+      scope: "global",
+      policyType: "REST_BREAK",
+      name: "Rest break for author-gap test",
+      jurisdiction: { country: "US", state: null },
+      effectiveFrom: "2024-01-01",
+      rules: { paidRestBreak: true, restBreakDurationMinutes: 10, minutesOfWorkPerRestBreak: 240, penalty: { type: "premium_pay", hours: 1, rate: "regular" } },
+    });
+    const policyId = draft.body.policyId;
+    await authed(ctx.app, adminBToken).post(`/api/v1/policies/${policyId}/submit-for-approval`);
+
+    // The author (A) must NOT be able to approve, despite B being the submitter.
+    const authorApprove = await authed(ctx.app, adminAToken).post(`/api/v1/policies/${policyId}/approve`);
+    expect(authorApprove.status).toBe(403);
+    // The submitter (B) also cannot approve.
+    const submitterApprove = await authed(ctx.app, adminBToken).post(`/api/v1/policies/${policyId}/approve`);
+    expect(submitterApprove.status).toBe(403);
+    // A genuinely independent third party (C) can.
+    const thirdPartyApprove = await authed(ctx.app, adminCToken).post(`/api/v1/policies/${policyId}/approve`);
+    expect(thirdPartyApprove.status).toBe(200);
+    expect(thirdPartyApprove.body.status).toBe("active");
+  });
+
   it("supports reject-and-resubmit, and versions/supersedes correctly on the next publish", async () => {
     const draft = await authed(ctx.app, adminAToken).post("/api/v1/policies", {
       scope: "global",

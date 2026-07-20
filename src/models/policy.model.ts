@@ -16,6 +16,9 @@ export interface PolicyMetadataDoc {
   updatedAt: Date;
   tags: string[];
   rejectionReason: string | null;
+  // Who submitted this version for approval (maker-checker). Tracked separately from the
+  // author (createdBy) / last editor (updatedBy) so approval can be blocked for all of them.
+  submittedBy: string | null;
 }
 
 export interface PolicyDoc {
@@ -58,6 +61,7 @@ const metadataSchema = new Schema<PolicyMetadataDoc>(
     updatedAt: { type: Date, required: true, default: () => new Date() },
     tags: { type: [String], default: [] },
     rejectionReason: { type: String, default: null },
+    submittedBy: { type: String, default: null },
   },
   { _id: false }
 );
