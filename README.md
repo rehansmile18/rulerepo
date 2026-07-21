@@ -19,8 +19,8 @@ global vs. client policies, maker-checker approvals, tenant isolation).
 npm install
 cp .env.example .env        # edit if you're not using the defaults
 
-# Start MongoDB if you don't already have one running:
-docker run -d --name tlm-mongo -p 27017:27017 mongo:7
+# Start MongoDB if you don't already have one running (bound to localhost only):
+docker run -d --name tlm-mongo -p 127.0.0.1:27017:27017 mongo:7
 
 npm run seed                # creates the first PLATFORM_ADMIN (see .env for its credentials)
 npm run seed:demo           # optional: populates realistic demo data (clients, policies, rule groups)
@@ -40,17 +40,30 @@ curl http://localhost:4000/health
 docker compose up -d --build
 ```
 
-That's it — on a fresh volume, MongoDB automatically runs `scripts/mongo-init.js` on its first
-boot (via `docker-entrypoint-initdb.d`) and the database comes up already seeded with demo data
-(see [Seeding data](#seeding-data)). The API is then available at `http://localhost:4000`.
+This brings up a **secure-by-default local stack**: MongoDB runs with authentication enabled and
+is bound to `127.0.0.1` only, the API connects with credentials, and the API is likewise bound to
+`127.0.0.1:4000`. It is **not** seeded automatically — no accounts exist until you seed, so no
+well-known demo passwords are ever created just by starting the stack.
 
-If you'd rather start empty and seed manually, or you're pointing at a volume that already has
-data, run:
+Bootstrap the first real admin (uses `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`):
 
 ```bash
-docker compose exec api npm run seed
-docker compose exec api npm run seed:demo
+docker compose exec api node dist/utils/seed.js
 ```
+
+Or, for local exploration only, load the full demo dataset (⚠️ creates accounts with the public
+passwords listed below — local use only):
+
+```bash
+docker compose exec api node dist/utils/seedDemoData.js
+```
+
+The API is then available at `http://localhost:4000`.
+
+> The Compose file runs as `NODE_ENV=development` so the placeholder secrets work out of the box.
+> To run it as a real deployment, set `NODE_ENV=production` **and** provide a real `JWT_SECRET`
+> plus `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD` (e.g. in a `.env` file) — the app refuses to
+> boot on placeholder secrets outside development/test.
 
 ## Environment variables
 
@@ -83,18 +96,25 @@ the demo client and skips if it's already there):
   running server.
 - **`scripts/mongo-init.js`** — the same dataset, but as a plain MongoDB script with no Node/npm
   involved at all: just indexes and `insertMany` calls. Useful if you want the database seeded
-  before the app exists in any runnable form (inspecting it directly with Compass/mongosh), or
-  in the Docker Compose flow above, where MongoDB runs it itself on first boot. Run it manually
-  with:
+  before the app exists in any runnable form (inspecting it directly with Compass/mongosh). It is
+  **not** wired into any automatic Docker init hook — a plain `docker compose up` never runs it —
+  so starting the stack never creates the well-known demo accounts. Run it manually against a
+  local database with:
   ```bash
   mongosh "mongodb://localhost:27017/tlm_rule_repository" scripts/mongo-init.js
   ```
-  Its user passwords are pre-hashed with bcrypt (cost factor 10) since mongosh has no bcrypt
-  available — the plaintext passwords are the same ones documented below and printed by
-  `seed:demo`.
+  Or into the running Compose stack (which requires auth) on purpose:
+  ```bash
+  docker compose exec -T mongo mongosh \
+    "mongodb://tlm_root:local-dev-only-change-me@localhost:27017/tlm_rule_repository?authSource=admin" \
+    < scripts/mongo-init.js
+  ```
+  ⚠️ Demo/local exploration only — it seeds accounts whose passwords are public (documented
+  below). Never run it against a production, staging, or network-reachable database. Its user
+  passwords are pre-hashed with bcrypt (cost factor 10) since mongosh has no bcrypt available.
 
-Run `npm run seed:demo` (or the mongosh script) against a fresh database if you just want to try
-the API without wiring up your own data first.
+Run `npm run seed:demo` (or the mongosh script) against a fresh **local** database if you just
+want to try the API without wiring up your own data first.
 
 ## Getting a token
 
@@ -165,3 +185,17 @@ The rule *content* for every policy type (thresholds, waiver conditions, penalty
 illustrative, written to exercise the architecture — it has not been reviewed by a compliance or
 legal function and should not be treated as legally accurate before real use. Everything else
 (the API, the versioning/approval lifecycle, tenant isolation, tests) is real and verified.
+
+## Security defaults
+
+- **Secrets fail closed.** Outside an explicit `NODE_ENV=development`/`test`, the app refuses to
+  boot on a missing or placeholder `JWT_SECRET` (and `SEED_ADMIN_PASSWORD` for the seed script).
+- **JWT algorithm pinned** to HS256 on both sign and verify.
+- **Tenant isolation on assignments**: an assignment can only reference a rule group owned by the
+  same client, and resolution is scoped to the caller's own client — a client can't bind or read
+  another tenant's rule group via a known `ruleGroupId`.
+- **Rate limiting**: a global per-IP limiter across the API, plus a tighter one on `/auth/login`.
+- **Least-privilege listing**: only admins can enumerate the user roster; pagination and rule-group
+  size are bounded to blunt resource-exhaustion.
+- **Compose stack is secure by default**: MongoDB requires auth and binds to localhost, the API
+  binds to localhost, and no demo accounts are auto-created. Demo data is always an explicit opt-in.
