@@ -77,8 +77,8 @@
   ]);
 
   database.clients.insertMany([
-    { _id: acmeId, name: "Acme Retail", status: "active", enabledStates: ["CA", "TX"], createdAt: now },
-    { _id: boltId, name: "Bolt Logistics", status: "active", enabledStates: ["NY", "CA"], createdAt: now },
+    { _id: acmeId, name: "Acme Retail", status: "active", country: "US", enabledStates: ["CA", "TX"], calendarFormat: "MM/DD/YYYY", createdAt: now },
+    { _id: boltId, name: "Bolt Logistics", status: "active", country: "US", enabledStates: ["NY", "CA"], calendarFormat: "MM/DD/YYYY", createdAt: now },
   ]);
 
   database.users.insertMany([

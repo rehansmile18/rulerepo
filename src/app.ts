@@ -12,6 +12,7 @@ import { ruleGroupRouter } from "./modules/ruleGroup/ruleGroup.routes";
 import { assignmentRouter } from "./modules/assignment/assignment.routes";
 import { clientRouter } from "./modules/client/client.routes";
 import { auditLogRouter } from "./modules/auditLog/auditLog.routes";
+import { geoRouter } from "./modules/geo/geo.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 
 export function createApp(): Express {
@@ -54,6 +55,7 @@ export function createApp(): Express {
   v1.use(assignmentRouter);
   v1.use(clientRouter);
   v1.use(auditLogRouter);
+  v1.use(geoRouter);
   app.use("/api/v1", v1);
 
   app.use(notFoundHandler);

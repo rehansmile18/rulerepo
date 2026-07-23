@@ -42,6 +42,13 @@ export type RuleGroupStatus = (typeof RULE_GROUP_STATUSES)[number];
 export const USER_ROLES = ["PLATFORM_ADMIN", "CLIENT_ADMIN", "VIEWER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+// Per-client date DISPLAY format (day/month/year order and separator) shown to every user under
+// that client, throughout the app. The underlying calendar is always Gregorian — this only
+// controls rendering, never date math (workweek/fiscal-year start is modeled separately per
+// policy, e.g. OVERTIME.workweekStartDay).
+export const CALENDAR_FORMATS = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"] as const;
+export type CalendarFormat = (typeof CALENDAR_FORMATS)[number];
+
 // Resolution priority when a target population overlaps across assignment scopes.
 export const TARGET_TYPE_SPECIFICITY: Record<AssignmentTargetType, number> = {
   EMPLOYEE: 50,

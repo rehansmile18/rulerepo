@@ -69,8 +69,20 @@ async function main(): Promise<void> {
   const checkerId = await createPlatformAdmin(DEMO_USERS.checker.email, DEMO_USERS.checker.password);
   console.log("Created 2 platform admins (maker + checker, for the approval workflow)");
 
-  const acme = await Client.create({ name: "Acme Retail", status: "active", enabledStates: ["CA", "TX"] });
-  const bolt = await Client.create({ name: "Bolt Logistics", status: "active", enabledStates: ["NY", "CA"] });
+  const acme = await Client.create({
+    name: "Acme Retail",
+    status: "active",
+    country: "US",
+    enabledStates: ["CA", "TX"],
+    calendarFormat: "MM/DD/YYYY",
+  });
+  const bolt = await Client.create({
+    name: "Bolt Logistics",
+    status: "active",
+    country: "US",
+    enabledStates: ["NY", "CA"],
+    calendarFormat: "MM/DD/YYYY",
+  });
   console.log("Created 2 clients: Acme Retail, Bolt Logistics");
 
   await userService.createUser(

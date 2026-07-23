@@ -46,6 +46,9 @@ const ruleGroupSchema = new Schema<RuleGroupDoc>(
     status: { type: String, enum: RULE_GROUP_STATUSES, required: true, default: "draft" },
     effectiveFrom: { type: Date, required: true },
     effectiveTo: { type: Date, default: null },
+    // Array order IS the execution/application sequence — expandRuleGroupPolicies (and therefore
+    // /assignments/resolve) returns resolved policies in this same order, so reordering this array
+    // is how a client controls the order policies are applied in.
     policyRefs: { type: [policyRefSchema], required: true, default: [] },
     metadata: {
       createdBy: { type: String, required: true },
