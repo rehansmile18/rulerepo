@@ -22,7 +22,9 @@ export function createApp(): Express {
   // allow all (fine for local/dev — requests still require a bearer token). Set it in production.
   const corsOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()).filter(Boolean);
   app.use(cors(corsOrigins && corsOrigins.length > 0 ? { origin: corsOrigins } : undefined));
-  app.use(express.json());
+  // Default (100kb) is comfortably enough for every JSON body except a base64 avatar upload —
+  // raised modestly rather than adding a second body parser just for that one route.
+  app.use(express.json({ limit: "2mb" }));
   if (process.env.NODE_ENV !== "test") {
     app.use(morgan("dev"));
   }

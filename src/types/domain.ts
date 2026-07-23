@@ -49,6 +49,12 @@ export type UserRole = (typeof USER_ROLES)[number];
 export const CALENDAR_FORMATS = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"] as const;
 export type CalendarFormat = (typeof CALENDAR_FORMATS)[number];
 
+// A user's own display-language preference (distinct from their client's calendarFormat, which
+// is shared by everyone under that client). Null means "no preference set" — the frontend falls
+// back to its own browser-local default.
+export const PREFERRED_LANGUAGES = ["en", "es", "ar"] as const;
+export type PreferredLanguage = (typeof PREFERRED_LANGUAGES)[number];
+
 // Resolution priority when a target population overlaps across assignment scopes.
 export const TARGET_TYPE_SPECIFICITY: Record<AssignmentTargetType, number> = {
   EMPLOYEE: 50,

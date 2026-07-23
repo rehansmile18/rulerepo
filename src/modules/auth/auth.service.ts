@@ -33,6 +33,8 @@ export async function login(input: LoginInput) {
       email: user.email,
       role: user.role,
       clientId: user.clientId ? String(user.clientId) : null,
+      preferredLanguage: user.preferredLanguage,
+      preferredDateFormat: user.preferredDateFormat,
     },
   };
 }

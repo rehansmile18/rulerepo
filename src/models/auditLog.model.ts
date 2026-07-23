@@ -10,7 +10,10 @@ export type AuditAction =
   | "submit_for_approval"
   | "approve"
   | "reject"
-  | "login";
+  | "login"
+  | "update_profile"
+  | "change_password"
+  | "update_avatar";
 
 export interface AuditLogDoc {
   _id: Types.ObjectId;
@@ -29,7 +32,20 @@ const auditLogSchema = new Schema<AuditLogDoc>(
     entityId: { type: String, required: true },
     action: {
       type: String,
-      enum: ["create", "update", "publish", "archive", "clone", "submit_for_approval", "approve", "reject", "login"],
+      enum: [
+        "create",
+        "update",
+        "publish",
+        "archive",
+        "clone",
+        "submit_for_approval",
+        "approve",
+        "reject",
+        "login",
+        "update_profile",
+        "change_password",
+        "update_avatar",
+      ],
       required: true,
     },
     actorId: { type: String, required: true },

@@ -3,12 +3,32 @@ import { asyncHandler } from "../../middleware/errorHandler";
 import { getReadClientFilter } from "../../middleware/tenantScope";
 import { ForbiddenError } from "../../utils/errors";
 import * as userService from "./user.service";
-import { CreateUserInput } from "./user.validators";
+import { ChangePasswordInput, CreateUserInput, UpdateAvatarInput, UpdateProfileInput } from "./user.validators";
 
 export const listUsersHandler = asyncHandler(async (req: Request, res: Response) => {
   const { page, pageSize } = req.query as unknown as { page: number; pageSize: number };
   const result = await userService.listUsers(getReadClientFilter(req), page, pageSize);
   res.json(result);
+});
+
+export const getMeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await userService.getProfile(req.auth!.userId);
+  res.json(user);
+});
+
+export const updateMeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await userService.updateProfile(req.auth!.userId, req.body as UpdateProfileInput);
+  res.json(user);
+});
+
+export const changePasswordHandler = asyncHandler(async (req: Request, res: Response) => {
+  await userService.changePassword(req.auth!.userId, req.body as ChangePasswordInput);
+  res.status(204).send();
+});
+
+export const updateAvatarHandler = asyncHandler(async (req: Request, res: Response) => {
+  const user = await userService.updateAvatar(req.auth!.userId, req.body as UpdateAvatarInput);
+  res.json(user);
 });
 
 export const createUserHandler = asyncHandler(async (req: Request, res: Response) => {
