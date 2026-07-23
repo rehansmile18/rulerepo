@@ -3,7 +3,9 @@ import { POLICY_TYPES, POLICY_SCOPES } from "../../types/domain";
 
 const jurisdictionSchema = z.object({
   country: z.string().default("US"),
-  state: z.string().length(2).nullable().optional(),
+  // ISO 3166-2 subdivision suffix — length varies by country (e.g. US/CA use 2 chars, GB uses up
+  // to 3), so this isn't fixed at length(2) like US-only data.
+  state: z.string().min(1).max(3).nullable().optional(),
   county: z.string().nullable().optional(),
   city: z.string().nullable().optional(),
 });
@@ -34,7 +36,7 @@ export const listPoliciesQuerySchema = z.object({
   policyType: z.enum(POLICY_TYPES).optional(),
   clientId: z.string().optional(),
   scope: z.enum(POLICY_SCOPES).optional(),
-  state: z.string().length(2).optional(),
+  state: z.string().min(1).max(3).optional(),
   status: z.string().optional(),
   effectiveOn: z.coerce.date().optional(),
   page: z.coerce.number().int().min(1).max(10000).default(1),
