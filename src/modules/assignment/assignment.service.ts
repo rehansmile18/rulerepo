@@ -93,21 +93,18 @@ const TARGET_ID_BY_TYPE: Record<AssignmentTargetType, StringTargetParamKey> = {
 };
 
 /**
- * Resolves the single most-specific active assignment for a worker on a given date,
- * then expands it into the concrete policies effective on that date.
- * Specificity order: EMPLOYEE > PAYGROUP > LOCATION > DEPARTMENT > STATE, tie-broken by priority.
+ * Loads every active assignment whose (targetType, targetId) matches one of the supplied
+ * identifiers, effective on `params.date`. Shared by both resolveAssignment (which collapses to
+ * one overall winner) and resolveAssignmentLayered (which keeps one winner per target type).
  */
-export async function resolveAssignment(params: ResolveParams) {
-  // Push target matching into the query (only assignments whose (targetType, targetId) actually
-  // match one of the supplied identifiers) instead of loading every active assignment and
-  // filtering in memory — this bounds the working set and lets the limit below be safe.
+async function findCandidateAssignments(params: ResolveParams): Promise<AssignmentDoc[]> {
   const targetMatchClauses = (Object.entries(TARGET_ID_BY_TYPE) as [AssignmentTargetType, StringTargetParamKey][])
     .flatMap(([targetType, paramKey]) => {
       const value = params[paramKey];
       return value !== undefined ? [{ targetType, targetIds: value }] : [];
     });
 
-  const matches = await Assignment.find({
+  return Assignment.find({
     clientId: new Types.ObjectId(params.clientId),
     status: "active",
     effectiveFrom: { $lte: params.date },
@@ -118,6 +115,31 @@ export async function resolveAssignment(params: ResolveParams) {
   })
     .limit(MAX_RESOLVE_CANDIDATES)
     .lean();
+}
+
+/** Resolves the rule-group version that was LIVE on `date` — never an in-flight draft or archived version. */
+async function findLiveRuleGroup(ruleGroupId: string, clientId: string, date: Date) {
+  // Scope to the caller's own client. createAssignment already blocks cross-tenant ruleGroupIds,
+  // but this closes resolve for any assignment planted before that guard existed — a rule group
+  // owned by another client must never resolve here.
+  return RuleGroup.findOne({
+    ruleGroupId,
+    clientId: new Types.ObjectId(clientId),
+    status: { $in: ["active", "superseded"] },
+    effectiveFrom: { $lte: date },
+    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: date } }],
+  })
+    .sort({ version: -1 })
+    .lean();
+}
+
+/**
+ * Resolves the single most-specific active assignment for a worker on a given date,
+ * then expands it into the concrete policies effective on that date.
+ * Specificity order: EMPLOYEE > PAYGROUP > LOCATION > DEPARTMENT > STATE, tie-broken by priority.
+ */
+export async function resolveAssignment(params: ResolveParams) {
+  const matches = await findCandidateAssignments(params);
 
   if (matches.length === 0) {
     throw new NotFoundError(
@@ -132,20 +154,7 @@ export async function resolveAssignment(params: ResolveParams) {
   });
   const winningAssignment = matches[0];
 
-  // Resolve the rule-group version that was LIVE on the date — never an in-flight draft or an
-  // archived version. Sort makes it deterministic when versions overlap the effective window.
-  const ruleGroup = await RuleGroup.findOne({
-    ruleGroupId: winningAssignment.ruleGroupId,
-    // Scope to the caller's own client. createAssignment already blocks cross-tenant ruleGroupIds,
-    // but this closes resolve for any assignment planted before that guard existed — a rule group
-    // owned by another client must never resolve here.
-    clientId: new Types.ObjectId(params.clientId),
-    status: { $in: ["active", "superseded"] },
-    effectiveFrom: { $lte: params.date },
-    $or: [{ effectiveTo: null }, { effectiveTo: { $gt: params.date } }],
-  })
-    .sort({ version: -1 })
-    .lean();
+  const ruleGroup = await findLiveRuleGroup(winningAssignment.ruleGroupId, params.clientId, params.date);
   if (!ruleGroup) {
     throw new NotFoundError(`Assignment resolved to rule group ${winningAssignment.ruleGroupId}, but no live version was effective on that date`);
   }
@@ -161,4 +170,55 @@ export async function resolveAssignment(params: ResolveParams) {
     unresolvedRefs,
     consideredAssignments: matches.length,
   };
+}
+
+export interface ResolvedLayer {
+  targetType: AssignmentTargetType;
+  assignment: AssignmentDoc;
+  ruleGroup: Awaited<ReturnType<typeof findLiveRuleGroup>> | null;
+  policies: Awaited<ReturnType<typeof expandRuleGroupPolicies>>["policies"];
+  unresolvedRefs: Awaited<ReturnType<typeof expandRuleGroupPolicies>>["unresolvedRefs"];
+  unresolved?: true;
+}
+
+/**
+ * Like resolveAssignment, but does NOT collapse across target types — every target type that has
+ * a live matching assignment (e.g. both an EMPLOYEE-targeted and a LOCATION-targeted assignment
+ * for the same punch) is returned as its own "layer", so a downstream engine (the punch/timesheet
+ * processor) can run all of them together instead of picking a single winner. Within one target
+ * type, the same specificity-then-priority tie-break as resolveAssignment still picks one winner —
+ * layering only happens ACROSS types, never across two competing assignments of the same type.
+ * Callers decide their own cross-layer ordering (e.g. by assignment.priority); this function
+ * returns layers grouped by type, not pre-sorted relative to each other.
+ */
+export async function resolveAssignmentLayered(params: ResolveParams): Promise<{ layers: ResolvedLayer[]; consideredAssignments: number }> {
+  const matches = await findCandidateAssignments(params);
+
+  const byType = new Map<AssignmentTargetType, AssignmentDoc[]>();
+  for (const match of matches) {
+    const bucket = byType.get(match.targetType);
+    if (bucket) bucket.push(match);
+    else byType.set(match.targetType, [match]);
+  }
+
+  const layers: ResolvedLayer[] = [];
+  for (const [targetType, candidates] of byType) {
+    candidates.sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      const effDiff = b.effectiveFrom.getTime() - a.effectiveFrom.getTime();
+      if (effDiff !== 0) return effDiff;
+      return String(a._id).localeCompare(String(b._id));
+    });
+    const winner = candidates[0];
+
+    const ruleGroup = await findLiveRuleGroup(winner.ruleGroupId, params.clientId, params.date);
+    if (!ruleGroup) {
+      layers.push({ targetType, assignment: winner, ruleGroup: null, policies: [], unresolvedRefs: [], unresolved: true });
+      continue;
+    }
+    const { policies, unresolvedRefs } = await expandRuleGroupPolicies(ruleGroup, params.date);
+    layers.push({ targetType, assignment: winner, ruleGroup, policies, unresolvedRefs });
+  }
+
+  return { layers, consideredAssignments: matches.length };
 }

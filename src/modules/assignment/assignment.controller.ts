@@ -34,17 +34,26 @@ export const updateAssignmentHandler = asyncHandler(async (req: Request, res: Re
   res.json(doc);
 });
 
+interface ResolveQuery {
+  clientId: string;
+  employeeId: string;
+  date: Date;
+  paygroupId?: string;
+  locationId?: string;
+  departmentId?: string;
+  state?: string;
+}
+
 export const resolveAssignmentHandler = asyncHandler(async (req: Request, res: Response) => {
-  const { clientId, employeeId, date, paygroupId, locationId, departmentId, state } = req.query as unknown as {
-    clientId: string;
-    employeeId: string;
-    date: Date;
-    paygroupId?: string;
-    locationId?: string;
-    departmentId?: string;
-    state?: string;
-  };
+  const { clientId, employeeId, date, paygroupId, locationId, departmentId, state } = req.query as unknown as ResolveQuery;
   assertCanWriteClient(req, clientId); // resolve is a read, but still tenant-scoped to the caller's own client
   const result = await assignmentService.resolveAssignment({ clientId, employeeId, date, paygroupId, locationId, departmentId, state });
+  res.json(result);
+});
+
+export const resolveAssignmentLayeredHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { clientId, employeeId, date, paygroupId, locationId, departmentId, state } = req.query as unknown as ResolveQuery;
+  assertCanWriteClient(req, clientId); // same tenant-scoping as the single-winner resolve endpoint
+  const result = await assignmentService.resolveAssignmentLayered({ clientId, employeeId, date, paygroupId, locationId, departmentId, state });
   res.json(result);
 });
