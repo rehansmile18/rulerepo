@@ -63,3 +63,11 @@ export const TARGET_TYPE_SPECIFICITY: Record<AssignmentTargetType, number> = {
   DEPARTMENT: 20,
   STATE: 10,
 };
+
+// Used by PayPeriodConfig (src/models/payPeriodConfig.model.ts) — mirrors tlm-punch-processor's
+// own src/types/domain.ts exactly, since both services read/write the same collection.
+export const CADENCES = ["daily", "weekly", "biweekly", "semi_monthly", "monthly", "salaried"] as const;
+export type Cadence = (typeof CADENCES)[number];
+
+export const PAY_DATE_WEEKEND_RULES = ["none", "prior_business_day", "next_business_day"] as const;
+export type PayDateWeekendRule = (typeof PAY_DATE_WEEKEND_RULES)[number];

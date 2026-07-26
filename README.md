@@ -154,7 +154,13 @@ seed script you ran):
 src/
   config/        env + MongoDB connection
   models/        Mongoose schemas — policy.model.ts is the polymorphic base;
-                  models/policies/*.model.ts are the per-type discriminators
+                  models/policies/*.model.ts are the per-type discriminators.
+                  employee/employeeGroup/site/task/payPeriodConfig/payrollCalendar/punch.model.ts
+                  are SCHEMA-ONLY mirrors of the sibling tlm-punch-processor service's own models —
+                  that service owns and exclusively writes those collections (which live in THIS
+                  database); they're duplicated here only so the shape of the data this DB hosts is
+                  documented/typed in this repo too. Nothing in TLM's own code reads or writes
+                  through them.
   modules/        one folder per resource: policy, ruleGroup, assignment, client,
                   auditLog, auth, user — each with validators/service/controller/routes
   middleware/     auth, tenant scoping, request validation, error handling
