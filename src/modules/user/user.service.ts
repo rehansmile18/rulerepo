@@ -3,13 +3,22 @@ import { Types } from "mongoose";
 import { User, UserDoc } from "../../models/user.model";
 import { recordAudit } from "../../models/auditLog.model";
 import { BadRequestError, HttpError, NotFoundError } from "../../utils/errors";
-import { ChangePasswordInput, CreateUserInput, UpdateAvatarInput, UpdateProfileInput } from "./user.validators";
+import {
+  ChangePasswordInput,
+  CreateUserInput,
+  UpdateAvatarInput,
+  UpdateProfileInput,
+  UpdateUserInput,
+} from "./user.validators";
 
 const SALT_ROUNDS = 12;
 
 export async function createUser(input: CreateUserInput, actorId: string): Promise<UserDoc> {
   if (input.role !== "PLATFORM_ADMIN" && !input.clientId) {
-    throw new BadRequestError("clientId is required for CLIENT_ADMIN and VIEWER users");
+    throw new BadRequestError("clientId is required for CLIENT_ADMIN, VIEWER, and SITE_MANAGER users");
+  }
+  if (input.role === "SITE_MANAGER" && (!input.siteIds || input.siteIds.length === 0)) {
+    throw new BadRequestError("siteIds must have at least one entry for SITE_MANAGER users");
   }
   const passwordHash = await bcrypt.hash(input.password, SALT_ROUNDS);
   let user: InstanceType<typeof User>;
@@ -19,9 +28,11 @@ export async function createUser(input: CreateUserInput, actorId: string): Promi
       passwordHash,
       role: input.role,
       clientId: input.role === "PLATFORM_ADMIN" ? null : new Types.ObjectId(input.clientId),
+      siteIds: input.siteIds ?? [],
+      permissions: input.permissions ?? [],
     });
   } catch (err) {
-    if (err instanceof Error && err.message.includes("clientId")) {
+    if (err instanceof Error && (err.message.includes("clientId") || err.message.includes("siteIds"))) {
       throw new BadRequestError(err.message);
     }
     throw err;
@@ -32,7 +43,7 @@ export async function createUser(input: CreateUserInput, actorId: string): Promi
     action: "create",
     actorId,
     before: null,
-    after: { email: user.email, role: user.role, clientId: user.clientId },
+    after: { email: user.email, role: user.role, clientId: user.clientId, siteIds: user.siteIds },
   });
   return user;
 }
@@ -51,6 +62,55 @@ export async function listUsers(tenantFilter: Record<string, unknown>, page: num
 export async function getProfile(userId: string): Promise<UserDoc> {
   const user = await User.findById(userId, { passwordHash: 0 }).lean();
   if (!user) throw new NotFoundError("User not found");
+  return user;
+}
+
+export async function getUserById(userId: string, tenantFilter: Record<string, unknown>): Promise<UserDoc> {
+  const user = await User.findOne({ _id: userId, ...tenantFilter }, { passwordHash: 0 }).lean();
+  if (!user) throw new NotFoundError("User not found");
+  return user;
+}
+
+/**
+ * Uses findById + .save() rather than findByIdAndUpdate — the schema's pre("validate") hook
+ * (clientId/siteIds requirements per role) is document middleware that only fires on
+ * .save()/.validate(), not on update-queries even with runValidators. Fetches with the same
+ * passwordHash projection as getProfile; excluded fields are safely left untouched by .save().
+ */
+export async function updateUser(userId: string, input: UpdateUserInput, actorId: string): Promise<UserDoc> {
+  const user = await User.findById(userId, { passwordHash: 0 });
+  if (!user) throw new NotFoundError("User not found");
+
+  const before = { role: user.role, clientId: user.clientId, siteIds: user.siteIds, permissions: user.permissions, status: user.status };
+  const effectiveRole = input.role ?? user.role;
+
+  if (input.role !== undefined) user.role = input.role;
+  if (input.clientId !== undefined) {
+    user.clientId = effectiveRole === "PLATFORM_ADMIN" ? null : new Types.ObjectId(input.clientId);
+  } else if (effectiveRole === "PLATFORM_ADMIN") {
+    user.clientId = null;
+  }
+  if (input.siteIds !== undefined) user.siteIds = input.siteIds;
+  if (input.permissions !== undefined) user.permissions = input.permissions;
+  if (input.status !== undefined) user.status = input.status;
+
+  try {
+    await user.save();
+  } catch (err) {
+    if (err instanceof Error && (err.message.includes("clientId") || err.message.includes("siteIds"))) {
+      throw new BadRequestError(err.message);
+    }
+    throw err;
+  }
+
+  await recordAudit({
+    entityType: "user",
+    entityId: userId,
+    action: "update",
+    actorId,
+    before,
+    after: { role: user.role, clientId: user.clientId, siteIds: user.siteIds, permissions: user.permissions, status: user.status },
+  });
   return user;
 }
 

@@ -39,7 +39,10 @@ export type AssignmentStatus = (typeof ASSIGNMENT_STATUSES)[number];
 export const RULE_GROUP_STATUSES = ["draft", "active", "superseded", "archived"] as const;
 export type RuleGroupStatus = (typeof RULE_GROUP_STATUSES)[number];
 
-export const USER_ROLES = ["PLATFORM_ADMIN", "CLIENT_ADMIN", "VIEWER"] as const;
+// SITE_MANAGER is scoped to one or more sites via User.siteIds (see user.model.ts) rather than
+// the whole client — a site manager oversees day-to-day operations (employees/schedules/punches)
+// at specific locations, consumed by the sibling tlm-site-ops service, not by this repo directly.
+export const USER_ROLES = ["PLATFORM_ADMIN", "CLIENT_ADMIN", "VIEWER", "SITE_MANAGER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
 // Per-client date DISPLAY format (day/month/year order and separator) shown to every user under

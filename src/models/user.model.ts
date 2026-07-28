@@ -7,6 +7,14 @@ export interface UserDoc {
   passwordHash: string;
   role: UserRole;
   clientId: Types.ObjectId | null;
+  // Site ids (matching Site.siteId — owned by the sibling tlm-site-ops service, not a local
+  // ObjectId ref) this user is scoped to. Only meaningful for SITE_MANAGER; empty for every other
+  // role.
+  siteIds: string[];
+  // Opaque, freely-editable capability keys (e.g. "employee:write") defined and enforced entirely
+  // by tlm-site-ops, not TLM — TLM just stores/returns them via GET /users/me, the same posture as
+  // siteIds above. Not tied to role: two users with the same role can have different permissions.
+  permissions: string[];
   status: "active" | "disabled";
   createdAt: Date;
   // Personal preferences, distinct from the client-wide calendarFormat. Null means "unset" — the
@@ -24,6 +32,8 @@ const userSchema = new Schema<UserDoc>(
     passwordHash: { type: String, required: true },
     role: { type: String, enum: USER_ROLES, required: true },
     clientId: { type: Schema.Types.ObjectId, ref: "Client", default: null },
+    siteIds: { type: [String], default: [] },
+    permissions: { type: [String], default: [] },
     status: { type: String, enum: ["active", "disabled"], required: true, default: "active" },
     createdAt: { type: Date, required: true, default: () => new Date() },
     preferredLanguage: { type: String, enum: PREFERRED_LANGUAGES, default: null },
@@ -35,10 +45,13 @@ const userSchema = new Schema<UserDoc>(
 
 userSchema.pre("validate", function (next) {
   if (this.role !== "PLATFORM_ADMIN" && !this.clientId) {
-    return next(new Error("clientId is required for CLIENT_ADMIN and VIEWER users"));
+    return next(new Error("clientId is required for CLIENT_ADMIN, VIEWER, and SITE_MANAGER users"));
   }
   if (this.role === "PLATFORM_ADMIN" && this.clientId) {
     return next(new Error("clientId must be null for PLATFORM_ADMIN users"));
+  }
+  if (this.role === "SITE_MANAGER" && this.siteIds.length === 0) {
+    return next(new Error("siteIds must have at least one entry for SITE_MANAGER users"));
   }
   next();
 });

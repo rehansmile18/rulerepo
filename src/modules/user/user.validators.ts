@@ -6,8 +6,27 @@ export const createUserSchema = z.object({
   password: z.string().min(8),
   role: z.enum(USER_ROLES),
   clientId: z.string().optional(),
+  // Only meaningful (and required) for role: SITE_MANAGER — enforced in the Mongoose
+  // pre("validate") hook (user.model.ts), not duplicated here, so there's one source of truth.
+  siteIds: z.array(z.string().min(1)).optional(),
+  // Opaque capability keys defined/enforced by the sibling tlm-site-ops service — TLM stores
+  // whatever is passed without interpreting it (see user.model.ts).
+  permissions: z.array(z.string().min(1)).optional(),
 });
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+
+export const updateUserSchema = z.object({
+  role: z.enum(USER_ROLES).optional(),
+  clientId: z.string().optional(),
+  siteIds: z.array(z.string().min(1)).optional(),
+  permissions: z.array(z.string().min(1)).optional(),
+  status: z.enum(["active", "disabled"]).optional(),
+});
+export type UpdateUserInput = z.infer<typeof updateUserSchema>;
+
+export const userIdParamSchema = z.object({
+  id: z.string(),
+});
 
 export const listUsersQuerySchema = z.object({
   clientId: z.string().optional(),
