@@ -62,3 +62,21 @@ export const env = {
 export function resolveSeedAdminPassword(): string {
   return resolveSecret("SEED_ADMIN_PASSWORD", "change-me-immediately");
 }
+
+/**
+ * Same fail-closed philosophy as resolveSecret above, applied to CORS: an unrestricted origin
+ * policy is a fine local/dev default (requests still require a bearer token), but must be an
+ * explicit choice — not a silent default — anywhere else.
+ */
+export function resolveCorsOrigins(): string[] | undefined {
+  const configured = process.env.CORS_ORIGIN?.split(",")
+    .map((o) => o.trim())
+    .filter(Boolean);
+  if (configured && configured.length > 0) return configured;
+  if (!allowsInsecureDefaults) {
+    throw new Error(
+      `CORS_ORIGIN must be set unless NODE_ENV is "development" or "test" (NODE_ENV=${process.env.NODE_ENV ?? "<unset>"}) — an unrestricted CORS policy is not allowed outside local dev/test`
+    );
+  }
+  return undefined;
+}

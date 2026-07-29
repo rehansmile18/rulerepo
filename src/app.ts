@@ -14,13 +14,15 @@ import { clientRouter } from "./modules/client/client.routes";
 import { auditLogRouter } from "./modules/auditLog/auditLog.routes";
 import { geoRouter } from "./modules/geo/geo.routes";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
+import { resolveCorsOrigins } from "./config/env";
 
 export function createApp(): Express {
   const app = express();
   app.use(helmet());
   // Restrict CORS to an explicit allowlist when CORS_ORIGIN is set (comma-separated); otherwise
-  // allow all (fine for local/dev — requests still require a bearer token). Set it in production.
-  const corsOrigins = process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()).filter(Boolean);
+  // allow all (fine for local/dev — requests still require a bearer token). resolveCorsOrigins()
+  // refuses to boot on an unset CORS_ORIGIN outside dev/test, so this can only be undefined locally.
+  const corsOrigins = resolveCorsOrigins();
   app.use(cors(corsOrigins && corsOrigins.length > 0 ? { origin: corsOrigins } : undefined));
   // Default (100kb) is comfortably enough for every JSON body except a base64 avatar upload —
   // raised modestly rather than adding a second body parser just for that one route.
