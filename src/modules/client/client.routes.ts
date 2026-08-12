@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authenticate, requireRole } from "../../middleware/auth";
 import { validateRequest } from "../../middleware/validateRequest";
 import { asyncHandler } from "../../middleware/errorHandler";
+import { NotFoundError } from "../../utils/errors";
 import { Client } from "../../models/client.model";
 import { CALENDAR_FORMATS } from "../../types/domain";
 
@@ -19,6 +20,22 @@ const createClientSchema = z.object({
   // (e.g. US/CA use 2 chars, GB uses up to 3), so this isn't fixed at length(2) like US-only data.
   enabledStates: z.array(z.string().min(1).max(3)).default([]),
   calendarFormat: z.enum(CALENDAR_FORMATS).default("MM/DD/YYYY"),
+});
+
+const clientIdParamSchema = z.object({
+  id: z.string(),
+});
+
+// Shape/length validated only — the module key itself and which locales a frontend supports are
+// that frontend's own concern, not TLM's (see client.model.ts). Deliberately scoped to just this
+// one field rather than a general "update a client" schema, since nothing else is editable yet.
+const updateClientModuleLabelsSchema = z.object({
+  moduleLabels: z
+    .record(
+      z.string().min(1).max(64),
+      z.record(z.enum(["en", "es", "ar"]), z.object({ singular: z.string().min(1).max(60), plural: z.string().min(1).max(60) }))
+    )
+    .nullable(),
 });
 
 export const clientRouter = Router();
@@ -56,5 +73,34 @@ clientRouter.post(
   asyncHandler(async (req, res) => {
     const client = await Client.create(req.body);
     res.status(201).json(client);
+  })
+);
+
+// Self-service — a CLIENT_ADMIN customizing their OWN org's terminology. The first write path
+// this role has ever had over Client data; deliberately narrow (just moduleLabels) rather than
+// opening up general client editing.
+clientRouter.patch(
+  "/clients/me",
+  requireRole("CLIENT_ADMIN"),
+  validateRequest({ body: updateClientModuleLabelsSchema }),
+  asyncHandler(async (req, res) => {
+    // requireRole("CLIENT_ADMIN") implies req.auth.clientId is set — enforced by the same
+    // pre("validate") invariant on User that requires clientId for every non-PLATFORM_ADMIN role.
+    const client = await Client.findByIdAndUpdate(req.auth!.clientId, { $set: req.body }, { new: true }).lean();
+    if (!client) throw new NotFoundError("Client not found");
+    res.json(client);
+  })
+);
+
+// PLATFORM_ADMIN has no client of their own, so /clients/me doesn't apply to them — this lets
+// them edit any client's labels (e.g. as part of onboarding/support).
+clientRouter.patch(
+  "/clients/:id",
+  requireRole("PLATFORM_ADMIN"),
+  validateRequest({ params: clientIdParamSchema, body: updateClientModuleLabelsSchema }),
+  asyncHandler(async (req, res) => {
+    const client = await Client.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true }).lean();
+    if (!client) throw new NotFoundError("Client not found");
+    res.json(client);
   })
 );

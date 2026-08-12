@@ -11,6 +11,13 @@ export interface ClientDoc {
   enabledStates: string[];
   calendarFormat: CalendarFormat;
   createdAt: Date;
+  // Per-module display-name overrides (e.g. renaming "Site" to "Business Unit"), shown to every
+  // user under this client, throughout the app — same tenant-wide posture as calendarFormat above.
+  // Keyed by an opaque module key each frontend defines and interprets; TLM never inspects the
+  // keys. One singular/plural pair per supported locale, since a single override reused across
+  // languages would produce mixed-language sentences. Null means "unset" — frontends fall back to
+  // their own built-in names.
+  moduleLabels: Record<string, Record<"en" | "es" | "ar", { singular: string; plural: string }>> | null;
 }
 
 const clientSchema = new Schema<ClientDoc>(
@@ -21,6 +28,7 @@ const clientSchema = new Schema<ClientDoc>(
     enabledStates: { type: [String], default: [] },
     calendarFormat: { type: String, enum: CALENDAR_FORMATS, required: true, default: "MM/DD/YYYY" },
     createdAt: { type: Date, required: true, default: () => new Date() },
+    moduleLabels: { type: Schema.Types.Mixed, default: null },
   },
   { collection: "clients" }
 );
