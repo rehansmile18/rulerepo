@@ -19,21 +19,30 @@ describe("self-service profile: preferences & password", () => {
     expect(res.body.role).toBe("PLATFORM_ADMIN");
     expect(res.body.preferredLanguage).toBeNull();
     expect(res.body.preferredDateFormat).toBeNull();
+    expect(res.body.preferredTimeFormat).toBeNull();
     expect(res.body.passwordHash).toBeUndefined();
   });
 
-  it("PATCH /users/me updates the language and date-format preference", async () => {
+  it("PATCH /users/me updates the language, date-format, and time-format preference", async () => {
     const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", {
       preferredLanguage: "es",
       preferredDateFormat: "DD/MM/YYYY",
+      preferredTimeFormat: "24h",
     });
     expect(res.status).toBe(200);
     expect(res.body.preferredLanguage).toBe("es");
     expect(res.body.preferredDateFormat).toBe("DD/MM/YYYY");
+    expect(res.body.preferredTimeFormat).toBe("24h");
 
     const fetched = await authed(ctx.app, adminToken).get("/api/v1/users/me");
     expect(fetched.body.preferredLanguage).toBe("es");
     expect(fetched.body.preferredDateFormat).toBe("DD/MM/YYYY");
+    expect(fetched.body.preferredTimeFormat).toBe("24h");
+  });
+
+  it("PATCH /users/me rejects an unsupported time format", async () => {
+    const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", { preferredTimeFormat: "36h" });
+    expect(res.status).toBe(400);
   });
 
   it("PATCH /users/me can clear a preference back to null", async () => {

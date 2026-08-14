@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CALENDAR_FORMATS, PREFERRED_LANGUAGES, USER_ROLES } from "../../types/domain";
+import { CALENDAR_FORMATS, PREFERRED_LANGUAGES, TIME_FORMATS, USER_ROLES } from "../../types/domain";
 
 export const createUserSchema = z.object({
   email: z.string().email(),
@@ -37,6 +37,7 @@ export const listUsersQuerySchema = z.object({
 export const updateProfileSchema = z.object({
   preferredLanguage: z.enum(PREFERRED_LANGUAGES).nullable().optional(),
   preferredDateFormat: z.enum(CALENDAR_FORMATS).nullable().optional(),
+  preferredTimeFormat: z.enum(TIME_FORMATS).nullable().optional(),
 });
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 

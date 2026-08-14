@@ -5,7 +5,7 @@ import { validateRequest } from "../../middleware/validateRequest";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { NotFoundError } from "../../utils/errors";
 import { Client } from "../../models/client.model";
-import { CALENDAR_FORMATS } from "../../types/domain";
+import { CALENDAR_FORMATS, TIME_FORMATS } from "../../types/domain";
 
 const createClientSchema = z.object({
   name: z.string().min(1),
@@ -20,6 +20,7 @@ const createClientSchema = z.object({
   // (e.g. US/CA use 2 chars, GB uses up to 3), so this isn't fixed at length(2) like US-only data.
   enabledStates: z.array(z.string().min(1).max(3)).default([]),
   calendarFormat: z.enum(CALENDAR_FORMATS).default("MM/DD/YYYY"),
+  timeFormat: z.enum(TIME_FORMATS).default("12h"),
 });
 
 const clientIdParamSchema = z.object({

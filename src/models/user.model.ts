@@ -1,5 +1,14 @@
 import { Schema, model, Types } from "mongoose";
-import { CALENDAR_FORMATS, CalendarFormat, PREFERRED_LANGUAGES, PreferredLanguage, USER_ROLES, UserRole } from "../types/domain";
+import {
+  CALENDAR_FORMATS,
+  CalendarFormat,
+  PREFERRED_LANGUAGES,
+  PreferredLanguage,
+  TIME_FORMATS,
+  TimeFormat,
+  USER_ROLES,
+  UserRole,
+} from "../types/domain";
 
 export interface UserDoc {
   _id: Types.ObjectId;
@@ -17,10 +26,11 @@ export interface UserDoc {
   permissions: string[];
   status: "active" | "disabled";
   createdAt: Date;
-  // Personal preferences, distinct from the client-wide calendarFormat. Null means "unset" — the
-  // frontend falls back to its own default.
+  // Personal preferences, distinct from the client-wide calendarFormat/timeFormat. Null means
+  // "unset" — the frontend falls back to its own default.
   preferredLanguage: PreferredLanguage | null;
   preferredDateFormat: CalendarFormat | null;
+  preferredTimeFormat: TimeFormat | null;
   // A base64 data: URL (frontend pre-resizes to a small square before upload) — no object storage
   // dependency needed for an avatar this small. Null means no photo; frontend falls back to initials.
   avatarUrl: string | null;
@@ -38,6 +48,7 @@ const userSchema = new Schema<UserDoc>(
     createdAt: { type: Date, required: true, default: () => new Date() },
     preferredLanguage: { type: String, enum: PREFERRED_LANGUAGES, default: null },
     preferredDateFormat: { type: String, enum: CALENDAR_FORMATS, default: null },
+    preferredTimeFormat: { type: String, enum: TIME_FORMATS, default: null },
     avatarUrl: { type: String, default: null },
   },
   { collection: "users" }

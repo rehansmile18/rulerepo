@@ -32,32 +32,43 @@ describe("clients: country, states, calendar format", () => {
     expect(lowerCase.body.items.length).toBeGreaterThan(40);
   });
 
-  it("creates a client with a country, states, and a calendar format", async () => {
+  it("creates a client with a country, states, a calendar format, and a time format", async () => {
     const res = await authed(ctx.app, adminToken).post("/api/v1/clients", {
       name: "Globex India",
       country: "in",
       enabledStates: ["MH", "KA"],
       calendarFormat: "DD/MM/YYYY",
+      timeFormat: "24h",
     });
     expect(res.status).toBe(201);
     expect(res.body.country).toBe("IN"); // normalized to uppercase
     expect(res.body.enabledStates).toEqual(["MH", "KA"]);
     expect(res.body.calendarFormat).toBe("DD/MM/YYYY");
+    expect(res.body.timeFormat).toBe("24h");
     clientId = res.body._id;
   });
 
-  it("defaults country to null and calendarFormat to MM/DD/YYYY when omitted", async () => {
+  it("defaults country to null, calendarFormat to MM/DD/YYYY, and timeFormat to 12h when omitted", async () => {
     const res = await authed(ctx.app, adminToken).post("/api/v1/clients", { name: "Global Co" });
     expect(res.status).toBe(201);
     expect(res.body.country).toBeNull();
     expect(res.body.enabledStates).toEqual([]);
     expect(res.body.calendarFormat).toBe("MM/DD/YYYY");
+    expect(res.body.timeFormat).toBe("12h");
   });
 
   it("rejects an invalid calendarFormat", async () => {
     const res = await authed(ctx.app, adminToken).post("/api/v1/clients", {
       name: "Bad Format Co",
       calendarFormat: "MM-DD-YYYY",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects an invalid timeFormat", async () => {
+    const res = await authed(ctx.app, adminToken).post("/api/v1/clients", {
+      name: "Bad Time Format Co",
+      timeFormat: "36h",
     });
     expect(res.status).toBe(400);
   });
@@ -82,11 +93,13 @@ describe("clients: country, states, calendar format", () => {
     const asClientAdmin = await authed(ctx.app, clientAdminToken).get("/api/v1/clients/me");
     expect(asClientAdmin.status).toBe(200);
     expect(asClientAdmin.body.client.calendarFormat).toBe("DD/MM/YYYY");
+    expect(asClientAdmin.body.client.timeFormat).toBe("24h");
     expect(asClientAdmin.body.client._id).toBe(clientId);
 
     const asViewer = await authed(ctx.app, viewerToken).get("/api/v1/clients/me");
     expect(asViewer.status).toBe(200);
     expect(asViewer.body.client.calendarFormat).toBe("DD/MM/YYYY");
+    expect(asViewer.body.client.timeFormat).toBe("24h");
 
     // A non-platform-admin still can't list ALL clients.
     const forbiddenList = await authed(ctx.app, viewerToken).get("/api/v1/clients");

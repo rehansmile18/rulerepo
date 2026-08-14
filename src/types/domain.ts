@@ -62,6 +62,11 @@ export const CALENDAR_FORMATS = [
 ] as const;
 export type CalendarFormat = (typeof CALENDAR_FORMATS)[number];
 
+// Clock DISPLAY format, settable per-client (default) and per-user (own override — see
+// User.preferredTimeFormat), same posture as CALENDAR_FORMATS above.
+export const TIME_FORMATS = ["12h", "24h"] as const;
+export type TimeFormat = (typeof TIME_FORMATS)[number];
+
 // A user's own display-language preference (distinct from their client's calendarFormat, which
 // is shared by everyone under that client). Null means "no preference set" — the frontend falls
 // back to its own browser-local default.
