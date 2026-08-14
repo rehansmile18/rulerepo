@@ -45,11 +45,21 @@ export type RuleGroupStatus = (typeof RULE_GROUP_STATUSES)[number];
 export const USER_ROLES = ["PLATFORM_ADMIN", "CLIENT_ADMIN", "VIEWER", "SITE_MANAGER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-// Per-client date DISPLAY format (day/month/year order and separator) shown to every user under
-// that client, throughout the app. The underlying calendar is always Gregorian — this only
-// controls rendering, never date math (workweek/fiscal-year start is modeled separately per
-// policy, e.g. OVERTIME.workweekStartDay).
-export const CALENDAR_FORMATS = ["MM/DD/YYYY", "DD/MM/YYYY", "YYYY-MM-DD"] as const;
+// Date DISPLAY format (day/month/year order and separator), settable per-client (the default for
+// everyone under that client) and per-user (an individual's own override — see
+// User.preferredDateFormat). The underlying calendar is always Gregorian — this only controls
+// rendering, never date math (workweek/fiscal-year start is modeled separately per policy, e.g.
+// OVERTIME.workweekStartDay). Covers the major real-world regional conventions: US (MM/DD/YYYY),
+// UK/EU/Commonwealth/India (DD/MM/YYYY), ISO 8601 (YYYY-MM-DD), German/Central-Eastern European
+// dotted (DD.MM.YYYY), dashed alternate (DD-MM-YYYY), and Japanese slashed (YYYY/MM/DD).
+export const CALENDAR_FORMATS = [
+  "MM/DD/YYYY",
+  "DD/MM/YYYY",
+  "YYYY-MM-DD",
+  "DD.MM.YYYY",
+  "DD-MM-YYYY",
+  "YYYY/MM/DD",
+] as const;
 export type CalendarFormat = (typeof CALENDAR_FORMATS)[number];
 
 // A user's own display-language preference (distinct from their client's calendarFormat, which
