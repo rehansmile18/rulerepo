@@ -12,7 +12,13 @@ import { LoginInput } from "./auth.validators";
 const DUMMY_HASH = "$2a$12$C6UzMDM.H6dfI/f/IKcEeO3fUx1cQF8sWnP0G7q3xJ8kqE0aI0hK";
 
 export async function login(input: LoginInput) {
-  const user = await User.findOne({ email: input.email.toLowerCase() });
+  // The caller may type their email, username, or mobile number into the same field — try all
+  // three. email/username are matched case-insensitively (both are stored lowercase); mobile is
+  // matched as-is since phone numbers have no meaningful casing.
+  const identifier = input.email.trim();
+  const user = await User.findOne({
+    $or: [{ email: identifier.toLowerCase() }, { username: identifier.toLowerCase() }, { mobile: identifier }],
+  });
   // Same error for "no such user" and "wrong password" — don't leak which one it was, and always
   // run a bcrypt compare so response timing doesn't reveal whether the account exists.
   const passwordMatches = await bcrypt.compare(input.password, user?.passwordHash ?? DUMMY_HASH);
@@ -31,10 +37,15 @@ export async function login(input: LoginInput) {
     user: {
       userId: String(user._id),
       email: user.email,
+      username: user.username,
       role: user.role,
       clientId: user.clientId ? String(user.clientId) : null,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      mobile: user.mobile,
       preferredLanguage: user.preferredLanguage,
       preferredDateFormat: user.preferredDateFormat,
+      preferredTimeFormat: user.preferredTimeFormat,
     },
   };
 }

@@ -35,6 +35,18 @@ export const listUsersQuerySchema = z.object({
 });
 
 export const updateProfileSchema = z.object({
+  firstName: z.string().trim().min(1).max(100).nullable().optional(),
+  lastName: z.string().trim().min(1).max(100).nullable().optional(),
+  // Lowercase letters/digits/dot/underscore/hyphen only — plain enough to type reliably as a login
+  // identifier, matched case-insensitively at login (see user.model.ts's lowercase: true).
+  username: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9._-]{3,30}$/, "Username must be 3-30 characters: letters, numbers, dots, underscores, or hyphens")
+    .nullable()
+    .optional(),
+  mobile: z.string().trim().min(1).max(30).nullable().optional(),
   preferredLanguage: z.enum(PREFERRED_LANGUAGES).nullable().optional(),
   preferredDateFormat: z.enum(CALENDAR_FORMATS).nullable().optional(),
   preferredTimeFormat: z.enum(TIME_FORMATS).nullable().optional(),

@@ -20,6 +20,66 @@ describe("auth & user management", () => {
     expect(typeof token).toBe("string");
   });
 
+  it("logs in with a username or mobile number in place of email", async () => {
+    const adminToken = await login(ctx.app, "admin@example.com", "correct-horse-battery-staple");
+    await authed(ctx.app, adminToken).patch("/api/v1/users/me", { username: "the-admin", mobile: "+1-555-0199" });
+
+    const byUsername = await authed(ctx.app, "").post("/api/v1/auth/login", {
+      email: "the-admin",
+      password: "correct-horse-battery-staple",
+    });
+    expect(byUsername.status).toBe(200);
+    expect(typeof byUsername.body.token).toBe("string");
+    expect(byUsername.body.user.username).toBe("the-admin");
+
+    const byMobile = await authed(ctx.app, "").post("/api/v1/auth/login", {
+      email: "+1-555-0199",
+      password: "correct-horse-battery-staple",
+    });
+    expect(byMobile.status).toBe(200);
+
+    // Username is matched case-insensitively, same as email.
+    const byUsernameUpper = await authed(ctx.app, "").post("/api/v1/auth/login", {
+      email: "THE-ADMIN",
+      password: "correct-horse-battery-staple",
+    });
+    expect(byUsernameUpper.status).toBe(200);
+  });
+
+  it("rejects a second user claiming a username or mobile already in use", async () => {
+    const adminToken = await login(ctx.app, "admin@example.com", "correct-horse-battery-staple");
+    const client = await authed(ctx.app, adminToken).post("/api/v1/clients", { name: "Username Conflict Co" });
+    await authed(ctx.app, adminToken).post("/api/v1/users", {
+      email: "first-user@example.test",
+      password: "first-user-pw-1",
+      role: "VIEWER",
+      clientId: client.body._id,
+    });
+    const firstToken = await login(ctx.app, "first-user@example.test", "first-user-pw-1");
+    const claimed = await authed(ctx.app, firstToken).patch("/api/v1/users/me", { username: "shared-name", mobile: "+1-555-0200" });
+    expect(claimed.status).toBe(200);
+
+    await authed(ctx.app, adminToken).post("/api/v1/users", {
+      email: "second-user@example.test",
+      password: "second-user-pw-1",
+      role: "VIEWER",
+      clientId: client.body._id,
+    });
+    const secondToken = await login(ctx.app, "second-user@example.test", "second-user-pw-1");
+
+    const usernameConflict = await authed(ctx.app, secondToken).patch("/api/v1/users/me", { username: "shared-name" });
+    expect(usernameConflict.status).toBe(409);
+
+    const mobileConflict = await authed(ctx.app, secondToken).patch("/api/v1/users/me", { mobile: "+1-555-0200" });
+    expect(mobileConflict.status).toBe(409);
+  });
+
+  it("rejects a malformed username", async () => {
+    const adminToken = await login(ctx.app, "admin@example.com", "correct-horse-battery-staple");
+    const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", { username: "no spaces allowed" });
+    expect(res.status).toBe(400);
+  });
+
   it("rejects requests with no token", async () => {
     const res = await authed(ctx.app, "").get("/api/v1/policies");
     expect(res.status).toBe(401);

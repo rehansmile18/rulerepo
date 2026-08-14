@@ -13,6 +13,10 @@ import {
 export interface UserDoc {
   _id: Types.ObjectId;
   email: string;
+  // Alternate login identifiers, both optional — see auth.service.ts's login, which accepts
+  // email, username, or mobile interchangeably in the same field. Unique WHEN SET (partial
+  // indexes below), but many users will never set either.
+  username: string | null;
   passwordHash: string;
   role: UserRole;
   clientId: Types.ObjectId | null;
@@ -26,6 +30,12 @@ export interface UserDoc {
   permissions: string[];
   status: "active" | "disabled";
   createdAt: Date;
+  // Self-service profile details — every field here is optional/nullable since a user created
+  // before these existed (or one who simply hasn't filled them in) has none of them set. Null
+  // means "unset", not "empty string".
+  firstName: string | null;
+  lastName: string | null;
+  mobile: string | null;
   // Personal preferences, distinct from the client-wide calendarFormat/timeFormat. Null means
   // "unset" — the frontend falls back to its own default.
   preferredLanguage: PreferredLanguage | null;
@@ -39,6 +49,7 @@ export interface UserDoc {
 const userSchema = new Schema<UserDoc>(
   {
     email: { type: String, required: true, trim: true, lowercase: true, unique: true },
+    username: { type: String, trim: true, lowercase: true, default: null },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: USER_ROLES, required: true },
     clientId: { type: Schema.Types.ObjectId, ref: "Client", default: null },
@@ -46,6 +57,9 @@ const userSchema = new Schema<UserDoc>(
     permissions: { type: [String], default: [] },
     status: { type: String, enum: ["active", "disabled"], required: true, default: "active" },
     createdAt: { type: Date, required: true, default: () => new Date() },
+    firstName: { type: String, default: null },
+    lastName: { type: String, default: null },
+    mobile: { type: String, trim: true, default: null },
     preferredLanguage: { type: String, enum: PREFERRED_LANGUAGES, default: null },
     preferredDateFormat: { type: String, enum: CALENDAR_FORMATS, default: null },
     preferredTimeFormat: { type: String, enum: TIME_FORMATS, default: null },
@@ -53,6 +67,13 @@ const userSchema = new Schema<UserDoc>(
   },
   { collection: "users" }
 );
+
+// Plain `unique: true` would reject a second user with the SAME default (null) value — every
+// unset document has username/mobile literally set to null (not absent), so a normal sparse index
+// wouldn't skip them either. A partial index scoped to actual string values is the correct way to
+// say "unique only when set" here.
+userSchema.index({ username: 1 }, { unique: true, partialFilterExpression: { username: { $type: "string" } } });
+userSchema.index({ mobile: 1 }, { unique: true, partialFilterExpression: { mobile: { $type: "string" } } });
 
 userSchema.pre("validate", function (next) {
   if (this.role !== "PLATFORM_ADMIN" && !this.clientId) {

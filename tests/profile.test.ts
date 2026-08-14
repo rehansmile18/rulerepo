@@ -17,27 +17,62 @@ describe("self-service profile: preferences & password", () => {
     expect(res.status).toBe(200);
     expect(res.body.email).toBe("admin@example.com");
     expect(res.body.role).toBe("PLATFORM_ADMIN");
+    expect(res.body.username).toBeNull();
+    expect(res.body.firstName).toBeNull();
+    expect(res.body.lastName).toBeNull();
+    expect(res.body.mobile).toBeNull();
     expect(res.body.preferredLanguage).toBeNull();
     expect(res.body.preferredDateFormat).toBeNull();
     expect(res.body.preferredTimeFormat).toBeNull();
     expect(res.body.passwordHash).toBeUndefined();
   });
 
-  it("PATCH /users/me updates the language, date-format, and time-format preference", async () => {
+  it("PATCH /users/me updates name, username, mobile, language, date-format, and time-format", async () => {
     const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", {
+      firstName: "Ada",
+      lastName: "Lovelace",
+      username: "ada.lovelace",
+      mobile: "+1-555-0100",
       preferredLanguage: "es",
       preferredDateFormat: "DD/MM/YYYY",
       preferredTimeFormat: "24h",
     });
     expect(res.status).toBe(200);
+    expect(res.body.firstName).toBe("Ada");
+    expect(res.body.lastName).toBe("Lovelace");
+    expect(res.body.username).toBe("ada.lovelace");
+    expect(res.body.mobile).toBe("+1-555-0100");
     expect(res.body.preferredLanguage).toBe("es");
     expect(res.body.preferredDateFormat).toBe("DD/MM/YYYY");
     expect(res.body.preferredTimeFormat).toBe("24h");
 
     const fetched = await authed(ctx.app, adminToken).get("/api/v1/users/me");
+    expect(fetched.body.firstName).toBe("Ada");
+    expect(fetched.body.lastName).toBe("Lovelace");
+    expect(fetched.body.username).toBe("ada.lovelace");
+    expect(fetched.body.mobile).toBe("+1-555-0100");
     expect(fetched.body.preferredLanguage).toBe("es");
     expect(fetched.body.preferredDateFormat).toBe("DD/MM/YYYY");
     expect(fetched.body.preferredTimeFormat).toBe("24h");
+  });
+
+  it("PATCH /users/me rejects an empty firstName", async () => {
+    const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", { firstName: "" });
+    expect(res.status).toBe(400);
+  });
+
+  it("PATCH /users/me can clear firstName/lastName/username/mobile back to null", async () => {
+    const res = await authed(ctx.app, adminToken).patch("/api/v1/users/me", {
+      firstName: null,
+      lastName: null,
+      username: null,
+      mobile: null,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.firstName).toBeNull();
+    expect(res.body.lastName).toBeNull();
+    expect(res.body.username).toBeNull();
+    expect(res.body.mobile).toBeNull();
   });
 
   it("PATCH /users/me rejects an unsupported time format", async () => {
