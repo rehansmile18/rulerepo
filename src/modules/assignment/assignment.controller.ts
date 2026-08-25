@@ -57,3 +57,20 @@ export const resolveAssignmentLayeredHandler = asyncHandler(async (req: Request,
   const result = await assignmentService.resolveAssignmentLayered({ clientId, employeeId, date, paygroupId, locationId, departmentId, state });
   res.json(result);
 });
+
+export const resolveAssignmentLayeredRangeHandler = asyncHandler(async (req: Request, res: Response) => {
+  const { clientId, employeeId, startDate, endDate, paygroupId, locationId, departmentId, state } =
+    req.query as unknown as Omit<ResolveQuery, "date"> & { startDate: Date; endDate: Date };
+  assertCanWriteClient(req, clientId); // same tenant-scoping as the single-date resolve endpoints
+  const result = await assignmentService.resolveAssignmentLayeredRange({
+    clientId,
+    employeeId,
+    startDate,
+    endDate,
+    paygroupId,
+    locationId,
+    departmentId,
+    state,
+  });
+  res.json(result);
+});

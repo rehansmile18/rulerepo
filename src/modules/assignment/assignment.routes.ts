@@ -7,6 +7,7 @@ import {
   listAssignmentsQuerySchema,
   assignmentIdParamSchema,
   resolveAssignmentQuerySchema,
+  resolveAssignmentRangeQuerySchema,
 } from "./assignment.validators";
 import {
   listAssignmentsHandler,
@@ -15,6 +16,7 @@ import {
   updateAssignmentHandler,
   resolveAssignmentHandler,
   resolveAssignmentLayeredHandler,
+  resolveAssignmentLayeredRangeHandler,
 } from "./assignment.controller";
 
 export const assignmentRouter = Router();
@@ -29,6 +31,14 @@ assignmentRouter.get(
   "/assignments/resolve-layered",
   validateRequest({ query: resolveAssignmentQuerySchema }),
   resolveAssignmentLayeredHandler
+);
+// Same resolution as /resolve-layered, but for a whole date range at once, returned as runs of
+// consecutive days that resolve identically. A pay engine walking a period would otherwise issue
+// one HTTP round trip per employee per day to learn what is usually the same answer every time.
+assignmentRouter.get(
+  "/assignments/resolve-layered-range",
+  validateRequest({ query: resolveAssignmentRangeQuerySchema }),
+  resolveAssignmentLayeredRangeHandler
 );
 
 assignmentRouter.get("/assignments", validateRequest({ query: listAssignmentsQuerySchema }), listAssignmentsHandler);

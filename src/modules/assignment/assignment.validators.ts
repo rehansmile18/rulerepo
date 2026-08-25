@@ -41,3 +41,28 @@ export const resolveAssignmentQuerySchema = z.object({
   departmentId: z.string().optional(),
   state: z.string().length(2).optional(),
 });
+
+/** Longest span one range resolve will walk. A semi-monthly or monthly pay period fits comfortably. */
+export const MAX_RESOLVE_RANGE_DAYS = 62;
+
+// Same shape as resolveAssignmentQuerySchema, but spanning a date range instead of one day. The
+// span is capped so a single request can't be turned into an unbounded day-by-day walk.
+export const resolveAssignmentRangeQuerySchema = z
+  .object({
+    clientId: z.string(),
+    employeeId: z.string(),
+    startDate: z.coerce.date(),
+    endDate: z.coerce.date(),
+    paygroupId: z.string().optional(),
+    locationId: z.string().optional(),
+    departmentId: z.string().optional(),
+    state: z.string().length(2).optional(),
+  })
+  .refine((q) => q.endDate.getTime() >= q.startDate.getTime(), {
+    message: "endDate must be on or after startDate",
+    path: ["endDate"],
+  })
+  .refine(
+    (q) => (q.endDate.getTime() - q.startDate.getTime()) / 86_400_000 < MAX_RESOLVE_RANGE_DAYS,
+    { message: `Date range must span fewer than ${MAX_RESOLVE_RANGE_DAYS} days`, path: ["endDate"] }
+  );

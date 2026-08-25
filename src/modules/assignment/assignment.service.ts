@@ -222,3 +222,61 @@ export async function resolveAssignmentLayered(params: ResolveParams): Promise<{
 
   return { layers, consideredAssignments: matches.length };
 }
+
+/**
+ * A run of consecutive calendar days over which resolveAssignmentLayered returns an identical
+ * result. `startDate`/`endDate` are inclusive "YYYY-MM-DD" strings.
+ */
+export interface ResolvedLayerSegment {
+  startDate: string;
+  endDate: string;
+  layers: ResolvedLayer[];
+  consideredAssignments: number;
+}
+
+function toUtcDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Resolves every calendar day in [startDate, endDate] and collapses consecutive days whose
+ * resolution is byte-identical into a single segment.
+ *
+ * This exists because resolution is a step function of the date — it changes only where an
+ * assignment, rule-group version or policy version boundary falls — but a caller processing a pay
+ * period has no sound way to know where those steps are. A caller cannot infer them from a
+ * single-date response either: the response describes what DID match, and says nothing about a
+ * not-yet-effective assignment that will start winning tomorrow. So the boundaries have to be
+ * found here, where the data is.
+ *
+ * Each day is resolved by the exact same resolveAssignmentLayered call the single-date endpoint
+ * uses, and segments are formed purely by comparing those results — no separate window arithmetic
+ * that could disagree with the resolver. That makes a segment's correctness a consequence of the
+ * per-day resolution rather than a second implementation of it.
+ */
+export async function resolveAssignmentLayeredRange(
+  params: Omit<ResolveParams, "date"> & { startDate: Date; endDate: Date }
+): Promise<{ segments: ResolvedLayerSegment[] }> {
+  const { startDate, endDate, ...rest } = params;
+  const segments: ResolvedLayerSegment[] = [];
+  let previousFingerprint: string | null = null;
+
+  for (
+    let cursor = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+    cursor.getTime() <= endDate.getTime();
+    cursor = new Date(cursor.getTime() + 86_400_000)
+  ) {
+    const dateStr = toUtcDateString(cursor);
+    const { layers, consideredAssignments } = await resolveAssignmentLayered({ ...rest, date: cursor });
+    const fingerprint = JSON.stringify(layers);
+
+    if (fingerprint === previousFingerprint) {
+      segments[segments.length - 1].endDate = dateStr;
+      continue;
+    }
+    segments.push({ startDate: dateStr, endDate: dateStr, layers, consideredAssignments });
+    previousFingerprint = fingerprint;
+  }
+
+  return { segments };
+}
