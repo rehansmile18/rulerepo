@@ -208,3 +208,105 @@ describe("clients: module label overrides", () => {
     expect(res.body.moduleLabels).toBeNull();
   });
 });
+
+describe("clients: regional settings", () => {
+  let ctx: TestContext;
+  let adminToken: string;
+  let clientId: string;
+  let clientAdminToken: string;
+
+  beforeAll(async () => {
+    ctx = await setupTestContext();
+    await seedPlatformAdmin("regional-admin@example.com", "admin-password-1");
+    adminToken = await login(ctx.app, "regional-admin@example.com", "admin-password-1");
+    const client = await authed(ctx.app, adminToken).post("/api/v1/clients", { name: "Regional Co" });
+    clientId = client.body._id;
+    await authed(ctx.app, adminToken).post("/api/v1/users", {
+      email: "regional-ca@acme.test",
+      password: "acme-admin-pw-123",
+      role: "CLIENT_ADMIN",
+      clientId,
+    });
+    clientAdminToken = await login(ctx.app, "regional-ca@acme.test", "acme-admin-pw-123");
+  });
+  afterAll(() => ctx.teardown());
+
+  it("defaults a new client to US-shaped regional settings", async () => {
+    const res = await authed(ctx.app, adminToken).get("/api/v1/clients");
+    const client = res.body.items.find((c: { _id: string }) => c._id === clientId);
+    expect(client).toMatchObject({
+      currency: "USD",
+      numberFormat: "1,234.56",
+      displayWeekStartDay: 0,
+      defaultTimezone: null,
+    });
+  });
+
+  it("lets a client admin change their own org's regional defaults after creation", async () => {
+    // These were write-once at creation before — an org that picked wrong on day one was stuck.
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", {
+      calendarFormat: "DD/MM/YYYY",
+      timeFormat: "24h",
+      defaultTimezone: "Europe/Madrid",
+      currency: "eur",
+      numberFormat: "1.234,56",
+      displayWeekStartDay: 1,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      calendarFormat: "DD/MM/YYYY",
+      timeFormat: "24h",
+      defaultTimezone: "Europe/Madrid",
+      currency: "EUR", // normalized to upper case
+      numberFormat: "1.234,56",
+      displayWeekStartDay: 1,
+    });
+  });
+
+  it("updates one setting without disturbing the others", async () => {
+    const before = await authed(ctx.app, clientAdminToken).get("/api/v1/clients/me");
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", { displayWeekStartDay: 6 });
+    expect(res.status).toBe(200);
+    expect(res.body.displayWeekStartDay).toBe(6);
+    expect(res.body.currency).toBe(before.body.client.currency);
+    expect(res.body.calendarFormat).toBe(before.body.client.calendarFormat);
+  });
+
+  it("rejects a time zone the runtime doesn't recognise", async () => {
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", {
+      defaultTimezone: "Mars/Olympus_Mons",
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts a deprecated-but-resolvable time zone alias", async () => {
+    // Intl still resolves these even though supportedValuesOf omits them, and real config data
+    // contains them — rejecting would be stricter than the date maths that consumes the value.
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", {
+      defaultTimezone: "US/Pacific",
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it("rejects a currency code that isn't ISO 4217", async () => {
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", { currency: "XYZ" });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a week start day outside 0-6", async () => {
+    const res = await authed(ctx.app, clientAdminToken).patch("/api/v1/clients/me", { displayWeekStartDay: 7 });
+    expect(res.status).toBe(400);
+  });
+
+  it("still refuses a non-admin role", async () => {
+    await authed(ctx.app, adminToken).post("/api/v1/users", {
+      email: "regional-viewer@acme.test",
+      password: "viewer-pw-12345",
+      role: "VIEWER",
+      clientId,
+    });
+    const viewerToken = await login(ctx.app, "regional-viewer@acme.test", "viewer-pw-12345");
+    const res = await authed(ctx.app, viewerToken).patch("/api/v1/clients/me", { currency: "GBP" });
+    expect(res.status).toBe(403);
+  });
+});

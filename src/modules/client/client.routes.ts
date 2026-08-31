@@ -5,7 +5,19 @@ import { validateRequest } from "../../middleware/validateRequest";
 import { asyncHandler } from "../../middleware/errorHandler";
 import { NotFoundError } from "../../utils/errors";
 import { Client } from "../../models/client.model";
-import { CALENDAR_FORMATS, TIME_FORMATS } from "../../types/domain";
+import { CALENDAR_FORMATS, NUMBER_FORMATS, TIME_FORMATS } from "../../types/domain";
+import { isValidCurrency, isValidTimeZone } from "../../utils/timezone";
+
+// Validated against the runtime's own tzdata rather than accepted as a free string: an
+// unrecognised zone would otherwise be stored happily and only fail later inside date arithmetic,
+// where it looks like a processing fault instead of a configuration mistake.
+const timezoneSchema = z.string().min(1).refine(isValidTimeZone, { message: "Not a recognised IANA time zone" });
+
+const currencySchema = z
+  .string()
+  .length(3)
+  .transform((v) => v.toUpperCase())
+  .refine(isValidCurrency, { message: "Not a recognised ISO 4217 currency code" });
 
 const createClientSchema = z.object({
   name: z.string().min(1),
@@ -21,22 +33,35 @@ const createClientSchema = z.object({
   enabledStates: z.array(z.string().min(1).max(3)).default([]),
   calendarFormat: z.enum(CALENDAR_FORMATS).default("MM/DD/YYYY"),
   timeFormat: z.enum(TIME_FORMATS).default("12h"),
+  defaultTimezone: timezoneSchema.nullable().optional(),
+  currency: currencySchema.default("USD"),
+  numberFormat: z.enum(NUMBER_FORMATS).default("1,234.56"),
+  displayWeekStartDay: z.number().int().min(0).max(6).default(0),
 });
 
 const clientIdParamSchema = z.object({
   id: z.string(),
 });
 
-// Shape/length validated only — the module key itself and which locales a frontend supports are
-// that frontend's own concern, not TLM's (see client.model.ts). Deliberately scoped to just this
-// one field rather than a general "update a client" schema, since nothing else is editable yet.
-const updateClientModuleLabelsSchema = z.object({
+// moduleLabels is shape/length validated only — the module key itself and which locales a frontend
+// supports are that frontend's own concern, not TLM's (see client.model.ts).
+const updateClientSchema = z.object({
   moduleLabels: z
     .record(
       z.string().min(1).max(64),
       z.record(z.enum(["en", "es", "ar"]), z.object({ singular: z.string().min(1).max(60), plural: z.string().min(1).max(60) }))
     )
-    .nullable(),
+    .nullable()
+    .optional(),
+  // Regional defaults were previously write-once at client creation, which meant an org that
+  // picked the wrong date format on day one had no way to correct it. Every field is optional so
+  // a caller can PATCH one setting without restating the others.
+  calendarFormat: z.enum(CALENDAR_FORMATS).optional(),
+  timeFormat: z.enum(TIME_FORMATS).optional(),
+  defaultTimezone: timezoneSchema.nullable().optional(),
+  currency: currencySchema.optional(),
+  numberFormat: z.enum(NUMBER_FORMATS).optional(),
+  displayWeekStartDay: z.number().int().min(0).max(6).optional(),
 });
 
 export const clientRouter = Router();
@@ -77,13 +102,13 @@ clientRouter.post(
   })
 );
 
-// Self-service — a CLIENT_ADMIN customizing their OWN org's terminology. The first write path
-// this role has ever had over Client data; deliberately narrow (just moduleLabels) rather than
-// opening up general client editing.
+// Self-service — a CLIENT_ADMIN configuring their OWN org: terminology overrides and the regional
+// display defaults every user under them inherits. Still deliberately narrow: name, country,
+// enabledStates and status remain PLATFORM_ADMIN-only concerns and are not editable here.
 clientRouter.patch(
   "/clients/me",
   requireRole("CLIENT_ADMIN"),
-  validateRequest({ body: updateClientModuleLabelsSchema }),
+  validateRequest({ body: updateClientSchema }),
   asyncHandler(async (req, res) => {
     // requireRole("CLIENT_ADMIN") implies req.auth.clientId is set — enforced by the same
     // pre("validate") invariant on User that requires clientId for every non-PLATFORM_ADMIN role.
@@ -94,11 +119,11 @@ clientRouter.patch(
 );
 
 // PLATFORM_ADMIN has no client of their own, so /clients/me doesn't apply to them — this lets
-// them edit any client's labels (e.g. as part of onboarding/support).
+// them configure any client (e.g. as part of onboarding or support).
 clientRouter.patch(
   "/clients/:id",
   requireRole("PLATFORM_ADMIN"),
-  validateRequest({ params: clientIdParamSchema, body: updateClientModuleLabelsSchema }),
+  validateRequest({ params: clientIdParamSchema, body: updateClientSchema }),
   asyncHandler(async (req, res) => {
     const client = await Client.findByIdAndUpdate(req.params.id, { $set: req.body }, { new: true }).lean();
     if (!client) throw new NotFoundError("Client not found");

@@ -6,7 +6,7 @@ import { asyncHandler } from "../../middleware/errorHandler";
 import { AuditLog } from "../../models/auditLog.model";
 
 const listAuditLogsQuerySchema = z.object({
-  entityType: z.enum(["policy", "ruleGroup", "assignment"]).optional(),
+  entityType: z.enum(["policy", "ruleGroup", "assignment", "user"]).optional(),
   entityId: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(200).default(50),

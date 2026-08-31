@@ -57,6 +57,11 @@ const auditLogSchema = new Schema<AuditLogDoc>(
 );
 
 auditLogSchema.index({ entityType: 1, entityId: 1, timestamp: -1 });
+// The audit-log list is most often read UNFILTERED (the console's default view), which sorts by
+// timestamp alone — a query the compound index above cannot serve, since it can only be used from
+// its entityType prefix. Without this that default view is a full collection scan plus an
+// in-memory sort, and gets slower every day the log grows.
+auditLogSchema.index({ timestamp: -1 });
 
 export const AuditLog = model<AuditLogDoc>("AuditLog", auditLogSchema);
 

@@ -67,6 +67,13 @@ export type CalendarFormat = (typeof CALENDAR_FORMATS)[number];
 export const TIME_FORMATS = ["12h", "24h"] as const;
 export type TimeFormat = (typeof TIME_FORMATS)[number];
 
+
+// Thousands/decimal separator convention, settable per client. Four conventions cover essentially
+// all real-world usage: Anglo (1,234.56), European (1.234,56), French/Nordic/Russian space-grouped
+// (1 234,56), and Indian lakh/crore grouping (1,23,456.78), which groups differently rather than
+// merely swapping separators.
+export const NUMBER_FORMATS = ["1,234.56", "1.234,56", "1 234,56", "1,23,456.78"] as const;
+export type NumberFormat = (typeof NUMBER_FORMATS)[number];
 // A user's own display-language preference (distinct from their client's calendarFormat, which
 // is shared by everyone under that client). Null means "no preference set" — the frontend falls
 // back to its own browser-local default.
